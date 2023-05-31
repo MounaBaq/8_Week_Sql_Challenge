@@ -177,3 +177,279 @@ where rank=1
 - While customer B has a big appetite and loves every item on the menu 
 
 ***
+### 6. Which item was purchased first by the customer after they became a member?
+
+```sql
+With members_sales_cte
+as
+(
+Select s.customer_id,s.order_date,m.join_date,s.product_id,
+dense_rank() over (partition by s.customer_id order by s.product_id) as rank
+from dbo.sales s
+join dbo.members m
+on s.customer_id= m.customer_id
+where s.order_date>=m.join_date
+)
+
+select s.customer_id,s.order_date,s.product_id,m2.product_name
+from members_sales_cte as s
+join dbo.menu m2
+on s.product_id=m2.product_id
+where rank=1
+
+```
+
+#### Steps:
+- In this CTE, we filter order_date to be on or after their join_date and then rank the product_id by the order_date.
+- Next, we filter the table by rank = 1 to show first item purchased by customer.
+
+#### Answer:
+| customer_id | product_name |
+| ----------- | ---------- |
+| A           | ramen        |
+| B           | sushi        |
+
+- Customer A's first order as a member is ramen.
+- Customer B's first order as a member is sushi.
+
+***
+### 7. Which item was purchased just before the customer became a member?
+
+````sql
+With prior_mem_pursh_cte
+as
+(
+Select s.customer_id,s.order_date,m.join_date,s.product_id,
+dense_rank() over (partition by s.customer_id order by s.order_date desc) as rank
+from dbo.sales s
+join dbo.members m
+on s.customer_id= m.customer_id
+where s.order_date < m.join_date
+)
+
+select s.customer_id,s.order_date,s.product_id,m2.product_name
+from prior_mem_pursh_cte as p
+join dbo.menu m2
+on s.product_id = m2.product_id
+where rank=1
+````
+
+#### Steps:
+- Create new column rank by partitioning customer_id by DESC order_date to find out the order_date just before the customer became member
+Filter order_date before join_date.
+-Then, pull table to show the last item ordered by customer before becoming member.
+#### Answer:
+| customer_id | product_name |
+| ----------- | ---------- |
+| A           | sushi        |
+| A           | curry        |
+| B           | sushi        |
+
+- Customer A’s order before he/she became member is sushi and curry and Customer B’s order is sushi. That must have been a real good sushi!
+***
+### 8. What is the total items and amount spent for each member before they became a member?
+
+```sql
+
+Select s.customer_id,sum(m.price) as sumsales,count (distinct s.product_id) total_sales
+from dbo.sales s
+join dbo.menu m
+on s.product_id= m.product_id
+join dbo.members mm
+on s.customer_id=mm.customer_id
+where  s.order_date < mm.join_date
+group by s.customer_id
+```
+
+#### Steps:
+- First, filter order_date before their join_date. Then, COUNT unique product_id and SUM the prices total spent before becoming member.
+
+#### Answer:
+| customer_id | total_items | total_sales |
+| ----------- | ---------- |----------  |
+| A           | 2 |  25       |
+| B           | 3 |  40       |
+
+Before becoming members,
+- Customer A spent $25 on 2 items.
+- Customer B spent $40 on 3 items.
+
+***
+
+### 9. If each $1 spent equates to 10 points and sushi has a 2x points multiplier — how many points would each customer have?
+
+```sql
+With points_cte as
+( select *, case when m.product_name='sushi' then m.price *20  else m.price*10 end as points
+from dbo.menu m
+)
+select s.customer_id, sum(m.points) points
+from points_cte m
+join dbo.sales s
+on m.product_id=s.product_id
+group by s.customer_id
+
+```
+
+#### Steps:
+Let's break down the question to understand the point calculation for each customer's purchases.
+- Each $1 spent = 10 points. However, `product_id` 1 sushi gets 2x points, so each $1 spent = 20 points.
+- Here's how the calculation is performed using a conditional CASE statement:
+	- If product_id = 1, multiply every $1 by 20 points.
+	- Otherwise, multiply $1 by 10 points.
+- Then, calculate the total points for each customer.
+
+#### Answer:
+| customer_id | total_points | 
+| ----------- | ---------- |
+| A           | 860 |
+| B           | 940 |
+| C           | 360 |
+
+- Total points for Customer A is $860.
+- Total points for Customer B is $940.
+- Total points for Customer C is $360.
+
+***
+
+### 10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi — how many points do customer A and B have at the end of January?
+
+```sql
+With Interval as
+(
+select *,
+dateadd ( day, 6, mm.join_date ) as weekafter,
+eomonth ( '2021-01-31') as Endofjanuary
+from dbo.members mm
+)
+Select i.customer_id,
+sum (case 
+ when m.product_name = 'sushi' 
+then m.price*2*10 
+ when s.order_date between  i.join_date  and i.weekafter
+then m.price*2*10
+ else m.price *10 end) points
+From Interval i
+Join dbo.sales s
+on i.customer_id = s.customer_id
+join dbo.menu m 
+on s.product_id = m.product_id
+where i.weekafter < i.Endofjanuary
+group by i.customer_id
+
+```
+
+#### Clarifications:
+- On Day -X to Day 1 (the day a customer becomes a member), each $1 spent earns 10 points. However, for sushi, each $1 spent earns 20 points.
+- From Day 1 to Day 7 (the first week of membership), each $1 spent for any items earns 20 points.
+- From Day 8 to the last day of January 2021, each $1 spent earns 10 points. However, sushi continues to earn double the points at 20 points per $1 spent.
+
+#### Steps:
+- Find out customer’s validity date (which is 6 days after join_date and inclusive of join_date) and last day of Jan 2021 (‘2021–01–21’).
+- Then, use CASE WHEN to allocate points by dates and product_name.
+
+
+
+#### Answer:
+| customer_id | total_points | 
+| ----------- | ---------- |
+| A           | 1370 |
+| B           | 820 |
+
+- Total points for Customer A is 1,370.
+- Total points for Customer B is 820.
+
+***
+
+## BONUS QUESTIONS
+
+### Join All The Things - Recreate the table with: customer_id, order_date, product_name, price, member (Y/N)
+
+```sql
+
+select s.customer_id,s.order_date,m.product_name,price,
+case
+when s.order_date < mm.join_date
+then 'N' 
+when s.order_date > = mm.join_date
+then 'Y'
+else 'N'
+end as member
+from  dbo.sales s
+left join dbo.members mm
+on s.customer_id = mm.customer_id
+join dbo.menu m
+on s.product_id = m.product_id
+```
+ 
+#### Answer: 
+| customer_id | order_date | product_name | price | member |
+| ----------- | ---------- | -------------| ----- | ------ |
+| A           | 2021-01-01 | sushi        | 10    | N      |
+| A           | 2021-01-01 | curry        | 15    | N      |
+| A           | 2021-01-07 | curry        | 15    | Y      |
+| A           | 2021-01-10 | ramen        | 12    | Y      |
+| A           | 2021-01-11 | ramen        | 12    | Y      |
+| A           | 2021-01-11 | ramen        | 12    | Y      |
+| B           | 2021-01-01 | curry        | 15    | N      |
+| B           | 2021-01-02 | curry        | 15    | N      |
+| B           | 2021-01-04 | sushi        | 10    | N      |
+| B           | 2021-01-11 | sushi        | 10    | Y      |
+| B           | 2021-01-16 | ramen        | 12    | Y      |
+| B           | 2021-02-01 | ramen        | 12    | Y      |
+| C           | 2021-01-01 | ramen        | 12    | N      |
+| C           | 2021-01-01 | ramen        | 12    | N      |
+| C           | 2021-01-07 | ramen        | 12    | N      |
+
+***
+
+### Rank All The Things - Danny also requires further information about the ```ranking``` of customer products, but he purposely does not need the ranking for non-member purchases so he expects null ```ranking``` values for the records when customers are not yet part of the loyalty program.
+
+```sql
+
+with member_cte 
+as 
+(select s.customer_id,s.order_date,m.product_name,price,
+case
+when s.order_date < mm.join_date
+then 'N' 
+when s.order_date > = mm.join_date
+then 'Y'
+else 'N'
+end as member
+from  dbo.sales s
+left join dbo.members mm
+on s.customer_id = mm.customer_id
+join dbo.menu m
+on s.product_id = m.product_id
+)
+select * , 
+case 
+when member = 'N'
+Then NUll 
+Else  
+rank() over (partition by mm2.customer_id,mm2.member order by mm2.order_date )
+end as ranking
+from member_cte mm2
+```
+
+#### Answer: 
+| customer_id | order_date | product_name | price | member | ranking | 
+| ----------- | ---------- | -------------| ----- | ------ |-------- |
+| A           | 2021-01-01 | sushi        | 10    | N      | NULL
+| A           | 2021-01-01 | curry        | 15    | N      | NULL
+| A           | 2021-01-07 | curry        | 15    | Y      | 1
+| A           | 2021-01-10 | ramen        | 12    | Y      | 2
+| A           | 2021-01-11 | ramen        | 12    | Y      | 3
+| A           | 2021-01-11 | ramen        | 12    | Y      | 3
+| B           | 2021-01-01 | curry        | 15    | N      | NULL
+| B           | 2021-01-02 | curry        | 15    | N      | NULL
+| B           | 2021-01-04 | sushi        | 10    | N      | NULL
+| B           | 2021-01-11 | sushi        | 10    | Y      | 1
+| B           | 2021-01-16 | ramen        | 12    | Y      | 2
+| B           | 2021-02-01 | ramen        | 12    | Y      | 3
+| C           | 2021-01-01 | ramen        | 12    | N      | NULL
+| C           | 2021-01-01 | ramen        | 12    | N      | NULL
+| C           | 2021-01-07 | ramen        | 12    | N      | NULL
+
+***
