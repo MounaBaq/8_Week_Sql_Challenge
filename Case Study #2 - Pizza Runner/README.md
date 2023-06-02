@@ -25,3 +25,5 @@ Danny started by recruiting “runners” to deliver fresh pizza from Pizza Runn
 Looking at the `customer_orders` table below, we can see that there are
 - In the `exclusions` column, there are missing/ blank spaces ' ' and null values. 
 - In the `extras` column, there are missing/ blank spaces ' ' and null values.
+
+![image](https://github.com/MounaBaq/8_Week_Sql_Challenge/assets/102436799/12210920-c547-4261-8966-70b23c17e0dd)
