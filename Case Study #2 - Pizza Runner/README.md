@@ -27,3 +27,22 @@ Looking at the `customer_orders` table below, we can see that there are
 - In the `extras` column, there are missing/ blank spaces ' ' and null values.
 
 ![image](https://github.com/MounaBaq/8_Week_Sql_Challenge/assets/102436799/12210920-c547-4261-8966-70b23c17e0dd)
+
+Our course of action to clean the table:
+- Create a temporary table with all the columns
+- Remove null values in `exlusions` and `extras` columns and replace with blank space ' '.
+
+````sql
+  select order_id,customer_id,pizza_id,order_time,
+  case 
+  when exclusions is null or exclusions like 'null' then ' ' else exclusions
+  END AS exclusions,
+  iif((extras is NULL) or (extras like 'null'), ' ', extras) as extras
+  INTO #customer_orders -- create TEMP TABLE
+  FROM customer_orders
+````
+
+This is how the clean `customers_orders_temp` table looks like and we will use this table to run all our queries.
+![image](https://github.com/MounaBaq/8_Week_Sql_Challenge/assets/102436799/a0537460-8143-454d-8ca7-e94fc1e38e99)
+
+****
